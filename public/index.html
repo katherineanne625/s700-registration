@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>S700 Card Registration</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      color: #1a1a1a;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      padding: 40px;
+      width: 100%;
+      max-width: 480px;
+    }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 32px;
+    }
+
+    /* Step indicator */
+    .steps {
+      display: flex;
+      gap: 0;
+      margin-bottom: 36px;
+    }
+
+    .step {
+      flex: 1;
+      height: 4px;
+      background: #e5e5e5;
+      border-radius: 2px;
+      margin-right: 4px;
+      transition: background 0.3s;
+    }
+
+    .step.active   { background: #1a1a1a; }
+    .step.complete { background: #22c55e; }
+    .step:last-child { margin-right: 0; }
+
+    /* Status banner */
+    .status {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-bottom: 24px;
+    }
+
+    .status.visible { display: flex; }
+    .status.info    { background: #f0f4ff; color: #3b5bdb; }
+    .status.success { background: #f0fdf4; color: #166534; }
+    .status.error   { background: #fff0f0; color: #b91c1c; }
+
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid currentColor;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Customer data display */
+    .data-grid {
+      display: none;
+      gap: 12px;
+      margin-bottom: 24px;
+      flex-direction: column;
+    }
+
+    .data-grid.visible { display: flex; }
+
+    .data-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .data-row:last-child { border-bottom: none; padding-bottom: 0; }
+
+    .data-label { color: #888; }
+    .data-value { font-weight: 500; }
+
+    /* Buttons */
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.15s, background 0.15s;
+      text-align: center;
+    }
+
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .btn-primary {
+      background: #1a1a1a;
+      color: #fff;
+      margin-bottom: 10px;
+    }
+
+    .btn-primary:hover:not(:disabled) { background: #333; }
+
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #1a1a1a;
+      margin-bottom: 10px;
+    }
+
+    .btn-secondary:hover:not(:disabled) { background: #e5e5e5; }
+
+    .btn-outline {
+      background: transparent;
+      color: #888;
+      border: 1px solid #ddd;
+      font-size: 13px;
+      padding: 10px;
+    }
+
+    .btn-outline:hover:not(:disabled) { background: #fafafa; }
+
+    .btn-group {
+      display: none;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .btn-group.visible { display: flex; }
+
+    /* Success result */
+    .result {
+      display: none;
+      text-align: center;
+      padding: 16px 0;
+    }
+
+    .result.visible { display: block; }
+
+    .result-icon {
+      font-size: 40px;
+      margin-bottom: 12px;
+    }
+
+    .result h2 { font-size: 18px; margin-bottom: 6px; }
+    .result p  { font-size: 13px; color: #666; }
+
+    .meta {
+      font-size: 12px;
+      color: #aaa;
+      margin-top: 20px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h1>Card Registration</h1>
+  <p class="subtitle">Festival Napa Valley — S700 Terminal</p>
+
+  <!-- Step bar: 1=collect info, 2=create customer, 3=collect card, 4=done -->
+  <div class="steps">
+    <div class="step" id="s1"></div>
+    <div class="step" id="s2"></div>
+    <div class="step" id="s3"></div>
+    <div class="step" id="s4"></div>
+  </div>
+
+  <!-- Status banner -->
+  <div class="status" id="status">
+    <div class="spinner" id="spinner"></div>
+    <span id="status-text"></span>
+  </div>
+
+  <!-- Collected customer data (shown after step 1) -->
+  <div class="data-grid" id="data-grid">
+    <div class="data-row">
+      <span class="data-label">Name</span>
+      <span class="data-value" id="val-name">—</span>
+    </div>
+    <div class="data-row">
+      <span class="data-label">Email</span>
+      <span class="data-value" id="val-email">—</span>
+    </div>
+    <div class="data-row">
+      <span class="data-label">Phone</span>
+      <span class="data-value" id="val-phone">—</span>
+    </div>
+    <div class="data-row">
+      <span class="data-label">Consent given</span>
+      <span class="data-value" id="val-consent">—</span>
+    </div>
+  </div>
+
+  <!-- Action buttons -->
+  <div class="btn-group" id="btn-group">
+    <button class="btn btn-primary"    id="btn-start"         onclick="startSession()">Start Session on Reader</button>
+    <button class="btn btn-primary"    id="btn-create"        onclick="createCustomer()" style="display:none">Create Customer</button>
+    <button class="btn btn-primary"    id="btn-save"          onclick="saveCard()"       style="display:none">Tap to Save Card (no charge)</button>
+    <button class="btn btn-secondary"  id="btn-charge"        onclick="chargeAndSave()"  style="display:none">Charge $1.00 &amp; Save Card</button>
+    <button class="btn btn-outline"    id="btn-reset"         onclick="reset()"          style="display:none">Start Over</button>
+  </div>
+
+  <!-- Success screen -->
+  <div class="result" id="result">
+    <div class="result-icon">✅</div>
+    <h2 id="result-title">Card Saved</h2>
+    <p id="result-desc"></p>
+    <br/>
+    <button class="btn btn-outline" onclick="reset()">Register Another</button>
+  </div>
+
+  <p class="meta" id="meta"></p>
+</div>
+
+<script>
+  // ── State ──────────────────────────────────────────────────────────────────
+  let readerId     = null;
+  let customerId   = null;
+  let collectedData = null;
+  let pollTimer    = null;
+
+  const BASE = '';  // same origin; change to 'http://localhost:3000' if serving separately
+
+  // ── UI helpers ─────────────────────────────────────────────────────────────
+
+  function setStep(n) {
+    [1,2,3,4].forEach(i => {
+      const el = document.getElementById('s' + i);
+      el.className = 'step' + (i < n ? ' complete' : i === n ? ' active' : '');
+    });
+  }
+
+  function showStatus(msg, type = 'info', spinning = true) {
+    const el  = document.getElementById('status');
+    const sp  = document.getElementById('spinner');
+    const txt = document.getElementById('status-text');
+    el.className  = 'status visible ' + type;
+    sp.style.display = spinning ? 'block' : 'none';
+    txt.textContent  = msg;
+  }
+
+  function hideStatus() {
+    document.getElementById('status').className = 'status';
+  }
+
+  function showBtn(...ids) {
+    document.getElementById('btn-group').className = 'btn-group visible';
+    ['btn-start','btn-create','btn-save','btn-charge','btn-reset'].forEach(id => {
+      document.getElementById(id).style.display = ids.includes(id) ? 'block' : 'none';
+    });
+  }
+
+  function setMeta(text) {
+    document.getElementById('meta').textContent = text;
+  }
+
+  function showData(data) {
+    document.getElementById('val-name').textContent    = data.name    || '—';
+    document.getElementById('val-email').textContent   = data.email   || '—';
+    document.getElementById('val-phone').textContent   = data.phone   || '—';
+    document.getElementById('val-consent').textContent = data.consentGiven ? '✓ Yes' : '✗ No';
+    document.getElementById('data-grid').className = 'data-grid visible';
+  }
+
+  function showResult(title, desc) {
+    document.getElementById('btn-group').className = 'btn-group';
+    document.getElementById('data-grid').className = 'data-grid';
+    hideStatus();
+    document.getElementById('result-title').textContent = title;
+    document.getElementById('result-desc').textContent  = desc;
+    document.getElementById('result').className = 'result visible';
+    setStep(4);
+  }
+
+  // ── API calls ───────────────────────────────────────────────────────────────
+
+  async function startSession() {
+    showBtn();                          // hide all buttons while working
+    setStep(1);
+    showStatus('Starting session on reader…');
+
+    try {
+      const res  = await fetch(BASE + '/start-session', { method: 'POST' });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      readerId = data.readerId;
+      showStatus('Waiting for customer to fill in form on reader…');
+      pollReader('collect_inputs');
+    } catch (err) {
+      showStatus('Error: ' + err.message, 'error', false);
+      showBtn('btn-start');
+    }
+  }
+
+  async function createCustomer() {
+    showBtn();
+    setStep(2);
+    showStatus('Creating customer…');
+
+    try {
+      const res  = await fetch(BASE + '/create-customer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name:  collectedData.name,
+          email: collectedData.email,
+          phone: collectedData.phone,
+        }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      customerId = data.customerId;
+      hideStatus();
+      setMeta('Customer ID: ' + customerId);
+      showBtn('btn-save', 'btn-charge', 'btn-reset');
+    } catch (err) {
+      showStatus('Error: ' + err.message, 'error', false);
+      showBtn('btn-create', 'btn-reset');
+    }
+  }
+
+  async function saveCard() {
+    showBtn();
+    setStep(3);
+    showStatus('Sending to reader — ask customer to tap card…');
+
+    try {
+      const res  = await fetch(BASE + '/save-card', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerId }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      pollReader('process_setup_intent');
+    } catch (err) {
+      showStatus('Error: ' + err.message, 'error', false);
+      showBtn('btn-save', 'btn-charge', 'btn-reset');
+    }
+  }
+
+  async function chargeAndSave() {
+    showBtn();
+    setStep(3);
+    showStatus('Sending to reader — ask customer to tap card ($1.00)…');
+
+    try {
+      const res  = await fetch(BASE + '/charge-and-save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerId }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      pollReader('process_payment_intent');
+    } catch (err) {
+      showStatus('Error: ' + err.message, 'error', false);
+      showBtn('btn-save', 'btn-charge', 'btn-reset');
+    }
+  }
+
+  // ── Polling ─────────────────────────────────────────────────────────────────
+
+  function pollReader(expectType) {
+    clearInterval(pollTimer);
+    pollTimer = setInterval(async () => {
+      try {
+        const res  = await fetch(BASE + '/reader-status/' + readerId);
+        const data = await res.json();
+
+        if (data.status === 'succeeded') {
+          clearInterval(pollTimer);
+
+          if (expectType === 'collect_inputs') {
+            collectedData = data.collectedData;
+
+            if (!collectedData.consentGiven) {
+              showStatus('Customer did not agree to terms. Please restart.', 'error', false);
+              showBtn('btn-start');
+              return;
+            }
+
+            showStatus('Info collected — review below.', 'success', false);
+            showData(collectedData);
+            setStep(2);
+            showBtn('btn-create', 'btn-reset');
+
+          } else if (expectType === 'process_setup_intent') {
+            showResult('Card Saved', 'The payment method has been securely saved to ' + (collectedData?.email || 'this customer') + '.');
+
+          } else if (expectType === 'process_payment_intent') {
+            showResult('$1.00 Charged & Card Saved', 'The $1.00 authorization was successful and the card has been saved to ' + (collectedData?.email || 'this customer') + '.');
+          }
+
+        } else if (data.status === 'failed') {
+          clearInterval(pollTimer);
+          showStatus('Reader action failed. Please try again.', 'error', false);
+          if (expectType === 'collect_inputs') showBtn('btn-start');
+          else showBtn('btn-save', 'btn-charge', 'btn-reset');
+        }
+        // else still in_progress — keep polling
+
+      } catch (err) {
+        // network hiccup — keep polling
+      }
+    }, 2000);
+  }
+
+  // ── Reset ───────────────────────────────────────────────────────────────────
+
+  function reset() {
+    clearInterval(pollTimer);
+    readerId      = null;
+    customerId    = null;
+    collectedData = null;
+
+    hideStatus();
+    setMeta('');
+    document.getElementById('data-grid').className = 'data-grid';
+    document.getElementById('result').className    = 'result';
+    setStep(1);
+    showBtn('btn-start');
+  }
+
+  // ── Init ────────────────────────────────────────────────────────────────────
+  reset();
+</script>
+</body>
+</html>
