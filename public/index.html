@@ -152,6 +152,19 @@
 
     .btn-outline:hover:not(:disabled) { background: #fafafa; }
 
+    .reader-select {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-bottom: 16px;
+      background: #fafafa;
+      color: #1a1a1a;
+    }
+
+    .reader-select:focus { outline: none; border-color: #1a1a1a; }
+
     .btn-group {
       display: none;
       flex-direction: column;
@@ -224,6 +237,11 @@
     </div>
   </div>
 
+  <!-- Reader selector -->
+  <select class="reader-select" id="reader-select">
+    <option value="">Loading readers...</option>
+  </select>
+
   <!-- Action buttons -->
   <div class="btn-group" id="btn-group">
     <button class="btn btn-primary"    id="btn-start"         onclick="startSession()">Start Session on Reader</button>
@@ -253,6 +271,24 @@
   let pollTimer    = null;
 
   const BASE = 'https://s700-registration-production.up.railway.app';
+
+  // ── Load readers on page load ──────────────────────────────────────────────
+  async function loadReaders() {
+    const sel = document.getElementById('reader-select');
+    try {
+      const res  = await fetch(BASE + '/readers');
+      const list = await res.json();
+      sel.innerHTML = list.length
+        ? list.map(r => `<option value="${r.id}">${r.label} (${r.status})</option>`).join('')
+        : '<option value="">No readers found</option>';
+    } catch {
+      sel.innerHTML = '<option value="">Could not load readers</option>';
+    }
+  }
+
+  function selectedReaderId() {
+    return document.getElementById('reader-select').value;
+  }
 
   // ── UI helpers ─────────────────────────────────────────────────────────────
 
@@ -313,7 +349,11 @@
     showStatus('Starting session on reader…');
 
     try {
-      const res  = await fetch(BASE + '/start-session', { method: 'POST' });
+      const res  = await fetch(BASE + '/start-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ readerId: selectedReaderId() }),
+      });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       readerId = data.readerId;
@@ -361,7 +401,7 @@
       const res  = await fetch(BASE + '/save-card', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId }),
+        body: JSON.stringify({ customerId, readerId }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
@@ -381,7 +421,7 @@
       const res  = await fetch(BASE + '/charge-and-save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId }),
+        body: JSON.stringify({ customerId, readerId }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
@@ -456,6 +496,7 @@
   }
 
   // ── Init ────────────────────────────────────────────────────────────────────
+  loadReaders();
   reset();
 </script>
 </body>

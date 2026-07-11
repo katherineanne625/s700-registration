@@ -28,11 +28,65 @@ const app = express();
 app.use(express.json());
 app.use(express.static('public')); // serves index.html at http://localhost:3000
 
+// Airtable config
+const AIRTABLE_TOKEN   = process.env.AIRTABLE_TOKEN;
+const AIRTABLE_BASE_ID = 'appaqKCU9D1HhgD1Q';
+const AIRTABLE_TABLE_ID = 'tblgrufZlc3XufEbM';
+
+// In-memory cache: customerId → { name, email, phone }
+const customerCache = new Map();
+
+async function writeToAirtable(data) {
+  const { name, email, phone, cardSaved, consentGiven } = data;
+  const body = {
+    fields: {
+      'Cardholder Name':          name   || '',
+      'Email Address':            email  || '',
+      'Phone Number':             phone  || '',
+      'Credit Card Saved?':       cardSaved    === true,
+      'Authorized to store card?': consentGiven === true,
+    },
+  };
+  const resp = await fetch(
+    `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_ID}`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization:  `Bearer ${AIRTABLE_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    }
+  );
+  if (!resp.ok) {
+    const err = await resp.text();
+    console.error('Airtable write failed:', err);
+  } else {
+    console.log('✅ Airtable record created for', email);
+  }
+}
+
+// ─── List available readers ───────────────────────────────────────────────────
+
+app.get('/readers', async (req, res) => {
+  try {
+    const readers = await stripe.terminal.readers.list({ limit: 20 });
+    res.json(readers.data.map(r => ({
+      id:     r.id,
+      label:  r.label || r.id,
+      status: r.status,
+    })));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── STEP 1: Start session — collect customer info on the S700 ───────────────
 
 app.post('/start-session', async (req, res) => {
+  const readerId = req.body.readerId || READER_ID;
   try {
-    const reader = await stripe.terminal.readers.collectInputs(READER_ID, {
+    const reader = await stripe.terminal.readers.collectInputs(readerId, {
       inputs: [
         {
           type: 'text',
@@ -62,11 +116,11 @@ app.post('/start-session', async (req, res) => {
           },
         },
         {
-          type: 'text',
+          type: 'signature',
           required: true,
           custom_text: {
             title: 'Authorization',
-            description: 'Card authorized for Gala purchases up to $10,000. Type your initials below to authorize.',
+            description: 'Card authorized for Gala purchases up to $10,000. Sign below to authorize.',
             submit_button: 'Submit',
           },
         },
@@ -104,7 +158,7 @@ app.get('/reader-status/:readerId', async (req, res) => {
           name:         results[0]?.text?.value ?? null,
           email:        results[1]?.text?.value ?? null,
           phone:        results[2]?.text?.value ?? null,
-          consentGiven: !!(results[3]?.text?.value?.trim()),
+          consentGiven: !!(results[3]?.signature?.value),
         };
         console.log('COLLECTED DATA:', response.collectedData);
       }
@@ -136,6 +190,9 @@ app.post('/create-customer', async (req, res) => {
       phone: phone || undefined,
     });
 
+    // Cache for use in webhook
+    customerCache.set(customer.id, { name, email, phone: phone || null });
+
     res.json({ customerId: customer.id });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -145,19 +202,18 @@ app.post('/create-customer', async (req, res) => {
 // ─── STEP 4a: Save card only (no charge) — SetupIntent ───────────────────────
 
 app.post('/save-card', async (req, res) => {
-  const { customerId } = req.body;
+  const { customerId, readerId } = req.body;
   if (!customerId) return res.status(400).json({ error: 'customerId required' });
+  const rid = readerId || READER_ID;
 
   try {
-    // Create a SetupIntent attached to the customer
     const setupIntent = await stripe.setupIntents.create({
       customer: customerId,
       payment_method_types: ['card_present'],
-      usage: 'off_session', // saved card can be charged later without customer present
+      usage: 'off_session',
     });
 
-    // Send the SetupIntent to the reader for card collection
-    const reader = await stripe.terminal.readers.processSetupIntent(READER_ID, {
+    const reader = await stripe.terminal.readers.processSetupIntent(rid, {
       setup_intent: setupIntent.id,
       allow_redisplay: 'always',
     });
@@ -176,8 +232,9 @@ app.post('/save-card', async (req, res) => {
 // ─── STEP 4b: Charge $1 + save card — PaymentIntent ──────────────────────────
 
 app.post('/charge-and-save', async (req, res) => {
-  const { customerId } = req.body;
+  const { customerId, readerId } = req.body;
   if (!customerId) return res.status(400).json({ error: 'customerId required' });
+  const rid = readerId || READER_ID;
 
   try {
     // Create a $1.00 PaymentIntent with setup_future_usage to save the card
@@ -191,7 +248,7 @@ app.post('/charge-and-save', async (req, res) => {
     });
 
     // Send the PaymentIntent to the reader
-    const reader = await stripe.terminal.readers.processPaymentIntent(READER_ID, {
+    const reader = await stripe.terminal.readers.processPaymentIntent(rid, {
       payment_intent: paymentIntent.id,
     });
 
@@ -234,14 +291,18 @@ app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
   switch (event.type) {
     case 'setup_intent.succeeded': {
       const si = event.data.object;
-      console.log(`✅ Card saved. Customer: ${si.customer}, PaymentMethod: ${si.payment_method}`);
-      // Store si.payment_method against si.customer in your DB here
+      const cached = customerCache.get(si.customer) || {};
+      console.log(`✅ Card saved. Customer: ${si.customer}`);
+      writeToAirtable({ ...cached, cardSaved: true, consentGiven: true });
+      customerCache.delete(si.customer);
       break;
     }
     case 'payment_intent.succeeded': {
       const pi = event.data.object;
-      console.log(`✅ $1 charged. Customer: ${pi.customer}, PaymentMethod: ${pi.payment_method}`);
-      // The card is also saved to the customer at this point
+      const cached = customerCache.get(pi.customer) || {};
+      console.log(`✅ $1 charged. Customer: ${pi.customer}`);
+      writeToAirtable({ ...cached, cardSaved: true, consentGiven: true });
+      customerCache.delete(pi.customer);
       break;
     }
     case 'terminal.reader.action_failed': {
