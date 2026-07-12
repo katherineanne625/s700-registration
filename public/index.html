@@ -459,9 +459,11 @@
             showBtn('btn-create', 'btn-reset');
 
           } else if (expectType === 'process_setup_intent') {
+            logToAirtable(true);
             showResult('Card Saved', 'The payment method has been securely saved to ' + (collectedData?.email || 'this customer') + '.');
 
           } else if (expectType === 'process_payment_intent') {
+            logToAirtable(true);
             showResult('$1.00 Charged & Card Saved', 'The $1.00 authorization was successful and the card has been saved to ' + (collectedData?.email || 'this customer') + '.');
           }
 
@@ -477,6 +479,26 @@
         // network hiccup — keep polling
       }
     }, 2000);
+  }
+
+  // ── Log to Airtable ─────────────────────────────────────────────────────────
+
+  async function logToAirtable(cardSaved) {
+    try {
+      await fetch(BASE + '/log-result', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name:         collectedData?.name,
+          email:        collectedData?.email,
+          phone:        collectedData?.phone,
+          cardSaved:    cardSaved,
+          consentGiven: collectedData?.consentGiven ?? true,
+        }),
+      });
+    } catch (err) {
+      console.error('Airtable log failed:', err);
+    }
   }
 
   // ── Reset ───────────────────────────────────────────────────────────────────

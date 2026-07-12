@@ -191,6 +191,19 @@ app.get('/reader-status/:readerId', async (req, res) => {
   }
 });
 
+// ─── Log result to Airtable ──────────────────────────────────────────────────
+
+app.post('/log-result', async (req, res) => {
+  const { name, email, phone, cardSaved, consentGiven } = req.body;
+  try {
+    await writeToAirtable({ name, email, phone, cardSaved, consentGiven });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('log-result error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── STEP 3: Create Stripe Customer ──────────────────────────────────────────
 
 app.post('/create-customer', async (req, res) => {
