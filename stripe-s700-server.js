@@ -124,6 +124,15 @@ app.post('/start-session', async (req, res) => {
           },
         },
         {
+          type: 'text',
+          required: false,
+          custom_text: {
+            title: 'Processing Fees',
+            description: 'Optional: Type YES to agree to cover any fees associated with this payment.',
+            submit_button: 'Next',
+          },
+        },
+        {
           type: 'signature',
           required: true,
           custom_text: {
@@ -166,8 +175,8 @@ app.get('/reader-status/:readerId', async (req, res) => {
           name:         results[0]?.text?.value ?? null,
           email:        results[1]?.text?.value ?? null,
           phone:        results[2]?.text?.value ?? null,
-          consentGiven: !!(results[3]?.signature?.value),
-          feesAgreed:   false, // collected from operator web UI, not terminal
+          feesAgreed:   !!(results[3]?.text?.value),
+          consentGiven: !!(results[4]?.signature?.value),
         };
         console.log('COLLECTED DATA:', response.collectedData);
       }

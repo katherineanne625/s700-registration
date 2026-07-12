@@ -110,23 +110,6 @@
     .data-label { color: #888; }
     .data-value { font-weight: 500; }
 
-    /* Fees checkbox */
-    .fees-check {
-      display: none;
-      align-items: flex-start;
-      gap: 10px;
-      padding: 14px 16px;
-      background: #fafafa;
-      border: 1px solid #e5e5e5;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      font-size: 13px;
-      color: #444;
-      cursor: pointer;
-    }
-    .fees-check.visible { display: flex; }
-    .fees-check input[type="checkbox"] { margin-top: 2px; flex-shrink: 0; width: 16px; height: 16px; cursor: pointer; }
-
     /* Buttons */
     .btn {
       display: block;
@@ -253,12 +236,6 @@
       <span class="data-value" id="val-consent">—</span>
     </div>
   </div>
-
-  <!-- Fees agreement (shown after customer info collected) -->
-  <label class="fees-check" id="fees-check">
-    <input type="checkbox" id="fees-checkbox" />
-    I agree to cover any fees associated with processing this payment. (Optional)
-  </label>
 
   <!-- Reader selector -->
   <select class="reader-select" id="reader-select">
@@ -479,7 +456,6 @@
             showStatus('Info collected — review below.', 'success', false);
             showData(collectedData);
             setStep(2);
-            document.getElementById('fees-check').className = 'fees-check visible';
             showBtn('btn-create', 'btn-reset');
 
           } else if (expectType === 'process_setup_intent') {
@@ -518,7 +494,7 @@
           phone:        collectedData?.phone,
           cardSaved:    cardSaved,
           consentGiven: collectedData?.consentGiven ?? true,
-          feesAgreed:   document.getElementById('fees-checkbox').checked,
+          feesAgreed:   collectedData?.feesAgreed ?? false,
         }),
       });
     } catch (err) {
@@ -538,8 +514,6 @@
     setMeta('');
     document.getElementById('data-grid').className  = 'data-grid';
     document.getElementById('result').className     = 'result';
-    document.getElementById('fees-check').className = 'fees-check';
-    document.getElementById('fees-checkbox').checked = false;
     setStep(1);
     showBtn('btn-start');
   }
