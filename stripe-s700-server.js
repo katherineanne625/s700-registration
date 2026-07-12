@@ -165,6 +165,16 @@ app.get('/reader-status/:readerId', async (req, res) => {
       if (action.type === 'process_setup_intent' || action.type === 'process_payment_intent') {
         response.intentId = action[action.type]?.setup_intent
           ?? action[action.type]?.payment_intent;
+
+        // Write to Airtable now (don't wait for webhook)
+        const readerKey = 'reader:' + req.params.readerId;
+        const cachedCustomerId = customerCache.get(readerKey);
+        if (cachedCustomerId) {
+          const cached = customerCache.get(cachedCustomerId) || {};
+          writeToAirtable({ ...cached, cardSaved: true, consentGiven: true });
+          customerCache.delete(cachedCustomerId);
+          customerCache.delete(readerKey);
+        }
       }
     }
 
@@ -218,6 +228,9 @@ app.post('/save-card', async (req, res) => {
       allow_redisplay: 'always',
     });
 
+    // Store reader → customer mapping so /reader-status can write to Airtable
+    customerCache.set('reader:' + rid, customerId);
+
     res.json({
       readerId: reader.id,
       setupIntentId: setupIntent.id,
@@ -251,6 +264,9 @@ app.post('/charge-and-save', async (req, res) => {
     const reader = await stripe.terminal.readers.processPaymentIntent(rid, {
       payment_intent: paymentIntent.id,
     });
+
+    // Store reader → customer mapping so /reader-status can write to Airtable
+    customerCache.set('reader:' + rid, customerId);
 
     res.json({
       readerId: reader.id,
