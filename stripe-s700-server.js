@@ -142,7 +142,7 @@ app.post('/start-session', async (req, res) => {
           },
           selection: {
             choices: [
-              { style: 'default', value: 'I agree to cover any fees associated with processing this payment.' },
+              { style: 'default', label: 'I agree to cover any fees associated with processing this payment.' },
             ],
           },
         },
@@ -181,7 +181,7 @@ app.get('/reader-status/:readerId', async (req, res) => {
           email:        results[1]?.text?.value ?? null,
           phone:        results[2]?.text?.value ?? null,
           consentGiven: !!(results[3]?.signature?.value),
-          feesAgreed:   !!(results[4]?.selection?.value),
+          feesAgreed:   !!(results[4]?.selection?.value ?? results[4]?.selection?.choice?.label),
         };
         console.log('COLLECTED DATA:', response.collectedData);
       }
