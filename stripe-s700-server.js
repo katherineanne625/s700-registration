@@ -37,7 +37,7 @@ const AIRTABLE_TABLE_ID = 'tblgrufZlc3XufEbM';
 const customerCache = new Map();
 
 async function writeToAirtable(data) {
-  const { name, email, phone, cardSaved, consentGiven } = data;
+  const { name, email, phone, cardSaved, consentGiven, feesAgreed } = data;
 
   // Use field IDs for reliability; omit phone if blank (phoneNumber type is strict)
   const fields = {
@@ -45,6 +45,7 @@ async function writeToAirtable(data) {
     'flddbKBD1o0ofOj0m': email || '',           // Email Address
     'fldpDXg4WCywf6bp6': cardSaved    === true, // Credit Card Saved?
     'fldWfMCES5H8hndSs': consentGiven === true, // Authorized to store card?
+    'fldCVKfOUUa0kP4Qk': feesAgreed   === true, // Pay additional Fees?
   };
   if (phone) fields['fldIx4LTG7MVwRSbL'] = phone; // Phone Number (only if provided)
 
@@ -100,7 +101,7 @@ app.post('/start-session', async (req, res) => {
           required: true,
           custom_text: {
             title: 'Full Name',
-            description: 'Enter your name',
+            description: 'Enter your name (Ex. Alex Smith, or Alex and Pat Smith)',
             submit_button: 'Next',
           },
         },
@@ -128,7 +129,21 @@ app.post('/start-session', async (req, res) => {
           custom_text: {
             title: 'Authorization',
             description: 'Card authorized for Gala purchases up to $10,000. Sign below to authorize.',
+            submit_button: 'Next',
+          },
+        },
+        {
+          type: 'selection',
+          required: false,
+          custom_text: {
+            title: 'Processing Fees',
+            description: 'Optional - tap the option below to select.',
             submit_button: 'Submit',
+          },
+          selection: {
+            choices: [
+              { style: 'default', value: 'I agree to cover any fees associated with processing this payment.' },
+            ],
           },
         },
       ],
@@ -166,6 +181,7 @@ app.get('/reader-status/:readerId', async (req, res) => {
           email:        results[1]?.text?.value ?? null,
           phone:        results[2]?.text?.value ?? null,
           consentGiven: !!(results[3]?.signature?.value),
+          feesAgreed:   !!(results[4]?.selection?.value),
         };
         console.log('COLLECTED DATA:', response.collectedData);
       }
@@ -194,9 +210,9 @@ app.get('/reader-status/:readerId', async (req, res) => {
 // ─── Log result to Airtable ──────────────────────────────────────────────────
 
 app.post('/log-result', async (req, res) => {
-  const { name, email, phone, cardSaved, consentGiven } = req.body;
+  const { name, email, phone, cardSaved, consentGiven, feesAgreed } = req.body;
   try {
-    await writeToAirtable({ name, email, phone, cardSaved, consentGiven });
+    await writeToAirtable({ name, email, phone, cardSaved, consentGiven, feesAgreed });
     res.json({ ok: true });
   } catch (err) {
     console.error('log-result error:', err.message);
