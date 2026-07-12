@@ -38,31 +38,38 @@ const customerCache = new Map();
 
 async function writeToAirtable(data) {
   const { name, email, phone, cardSaved, consentGiven } = data;
-  const body = {
-    fields: {
-      'Cardholder Name':          name   || '',
-      'Email Address':            email  || '',
-      'Phone Number':             phone  || '',
-      'Credit Card Saved?':       cardSaved    === true,
-      'Authorized to store card?': consentGiven === true,
-    },
+
+  // Use field IDs for reliability; omit phone if blank (phoneNumber type is strict)
+  const fields = {
+    'flddsCSJE3JJ4Cafy': name  || '',          // Cardholder Name
+    'flddbKBD1o0ofOj0m': email || '',           // Email Address
+    'fldpDXg4WCywf6bp6': cardSaved    === true, // Credit Card Saved?
+    'fldWfMCES5H8hndSs': consentGiven === true, // Authorized to store card?
   };
-  const resp = await fetch(
-    `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_ID}`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization:  `Bearer ${AIRTABLE_TOKEN}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
+  if (phone) fields['fldIx4LTG7MVwRSbL'] = phone; // Phone Number (only if provided)
+
+  console.log('📤 Writing to Airtable:', JSON.stringify({ name, email, phone, cardSaved, consentGiven }));
+
+  try {
+    const resp = await fetch(
+      `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_ID}`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization:  `Bearer ${AIRTABLE_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ fields }),
+      }
+    );
+    if (!resp.ok) {
+      const err = await resp.text();
+      console.error('❌ Airtable write failed:', err);
+    } else {
+      console.log('✅ Airtable record created for', email);
     }
-  );
-  if (!resp.ok) {
-    const err = await resp.text();
-    console.error('Airtable write failed:', err);
-  } else {
-    console.log('✅ Airtable record created for', email);
+  } catch (err) {
+    console.error('❌ Airtable fetch error:', err.message);
   }
 }
 
