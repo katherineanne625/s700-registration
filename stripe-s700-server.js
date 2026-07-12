@@ -129,21 +129,7 @@ app.post('/start-session', async (req, res) => {
           custom_text: {
             title: 'Authorization',
             description: 'Card authorized for Gala purchases up to $10,000. Sign below to authorize.',
-            submit_button: 'Next',
-          },
-        },
-        {
-          type: 'selection',
-          required: false,
-          custom_text: {
-            title: 'Processing Fees',
-            description: 'Optional - tap the option below to select.',
             submit_button: 'Submit',
-          },
-          selection: {
-            choices: [
-              { style: 'default', label: 'I agree to cover any fees associated with processing this payment.' },
-            ],
           },
         },
       ],
@@ -181,7 +167,7 @@ app.get('/reader-status/:readerId', async (req, res) => {
           email:        results[1]?.text?.value ?? null,
           phone:        results[2]?.text?.value ?? null,
           consentGiven: !!(results[3]?.signature?.value),
-          feesAgreed:   !!(results[4]?.selection?.value ?? results[4]?.selection?.choice?.label),
+          feesAgreed:   false, // collected from operator web UI, not terminal
         };
         console.log('COLLECTED DATA:', response.collectedData);
       }
